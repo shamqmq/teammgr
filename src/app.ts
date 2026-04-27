@@ -1,0 +1,16 @@
+import express, {type Request, type Response} from "express";
+import auth_router from "./routes/auth";
+import users_router from "./routes/users";
+
+const app = express();
+
+app.use(express.json());
+
+app.use("/api", auth_router);
+app.use("/api", users_router);
+
+app.get("/api",(_req: Request, res: Response) =>{
+  res.status(200).json({msg: "you reached the root"});
+});
+
+export default app;
