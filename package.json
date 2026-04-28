@@ -18,8 +18,10 @@
   },
   "dependencies": {
     "@types/express": "^5.0.6",
+    "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "zod": "^4.3.6"
   }
 }

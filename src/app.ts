@@ -1,6 +1,6 @@
 import express, {type Request, type Response} from "express";
-import auth_router from "./routes/auth";
-import users_router from "./routes/users";
+import auth_router from "./routes/auth_router";
+import users_router from "./routes/users_router";
 
 const app = express();
 

@@ -32,6 +32,7 @@ deployment.
 | ORM              | Drizzle                       |
 | Authentication   | JWT (access + refresh tokens) |
 | Testing          | Jest                          |
+| Validatation     | Zod                           |
 | Containerisation | Docker, Docker Compose        |
 | Reverse Proxy    | Nginx                         |
 
