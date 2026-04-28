@@ -111,7 +111,7 @@ All endpoints prefixed with `/api/`. It redirects automatically to auth
 | PATCH  | /tasks/:id                     | Auth     | Admin: edit any field; Employee: only update status (with business rules)                                             |
 | DELETE | /tasks/:id                     | Admin    | Delete a task (cascade assignments/requests)                                                                          |
 | POST   | /tasks/:id/assign              | Admin    | Assign employees to a task (body: { userIds: string[] })                                                              |
-| DELETE | /tasks/:id/assign/:userId      | Admin    | Remove assignment                                                                                                     |
+| DELETE | /tasks/:id/assign              | Admin    | Remove assignment (body: {userIDs: [])                                                                                                     |
 | POST   | /tasks/request                 | Employee | Request a task to the Admin                                                                                           |
 | GET    | /tasks/requests                | Admin    | View pending task requests                                                                                            |
 | PATCH  | /tasks/requests/:requestId     | Admin    | Approve or reject a request                                                                                           |
@@ -142,7 +142,7 @@ All endpoints prefixed with `/api/`. It redirects automatically to auth
 - **JWT‑based** with two tokens:
   - **Access token** (short lifespan, e.g. 15 min) – sent in `Authorization: Bearer <token>` header.
   - **Refresh token** (long lifespan, e.g. 7 days) – stored in HTTP‑only cookie or secure storage; used to obtain new access tokens.
-- Password hashing: **bcrypt** (12 salt rounds).
+- Password hashing: **bcrypt** (10 salt rounds).
 - RBAC middleware:
   - `authenticate` – verifies JWT, attaches user to `req.user`.
   - `authorize(...roles)` – checks `req.user.role` against allowed roles.

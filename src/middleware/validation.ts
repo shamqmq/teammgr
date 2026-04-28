@@ -13,6 +13,13 @@ export const loginSchema = z.object({
   password: z.string().min(6, 'Password is required'),
 })
 
+export const updateUserSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  email: z.string().email().optional(),
+  password: z.string().min(6).max(128).optional(),
+  role: z.enum(['admin', 'employee']).optional(),
+});
+
 export function validate(schema: z.ZodTypeAny) {
   return (req: Request, res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.body);
@@ -33,4 +40,9 @@ export function validate(schema: z.ZodTypeAny) {
     req.body = result.data;
     next();
   };
+}
+
+export function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
 }

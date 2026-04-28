@@ -12,7 +12,7 @@ import { hash, compare } from 'bcryptjs';
 
 const auth_router = express.Router();
 
-auth_router.post("/auth/register", validate(registerSchema), async (req: Request, res: Response) => {
+auth_router.post("/register", validate(registerSchema), async (req: Request, res: Response) => {
 
         try {
                 const { name, email, password, role } = req.body;
@@ -47,7 +47,7 @@ auth_router.post("/auth/register", validate(registerSchema), async (req: Request
 }
 )
 
-auth_router.post("/auth/login", validate(loginSchema), async (req: Request, res: Response) => {
+auth_router.post("/login", validate(loginSchema), async (req: Request, res: Response) => {
         try {
                 const { email, password } = req.body;
 
@@ -83,12 +83,12 @@ auth_router.post("/auth/login", validate(loginSchema), async (req: Request, res:
 
 // TODO: after JWT and auth thing
 
-auth_router.post("/auth/refresh", (req: Request, res: Response) => {
+auth_router.post("/refresh", (req: Request, res: Response) => {
         var user = req.body;
         res.status(200).json({ usr: user, msg: "implement the refresh" });
 })
 
-auth_router.post("/auth/logout", (req: Request, res: Response) => {
+auth_router.post("/logout", (req: Request, res: Response) => {
         var user = req.body;
         res.status(200).json({ usr: user, msg: "implement the logout" });
 })
