@@ -92,7 +92,6 @@ All endpoints prefixed with `/api/`. It redirects automatically to auth
 | POST   | /auth/register | Public | Register new user (optional admin flag)         |
 | POST   | /auth/login    | Public | Returns access + refresh tokens                 |
 | POST   | /auth/refresh  | Public | Accepts refresh token, returns new access token |
-| POST   | /auth/logout   | Auth   | Invalidate refresh token                        |
 
 ### 2. Users
 | Method | Path          | Access     | Description                |
@@ -111,7 +110,7 @@ All endpoints prefixed with `/api/`. It redirects automatically to auth
 | PATCH  | /tasks/:id                     | Auth     | Admin: edit any field; Employee: only update status (with business rules)                                             |
 | DELETE | /tasks/:id                     | Admin    | Delete a task (cascade assignments/requests)                                                                          |
 | POST   | /tasks/:id/assign              | Admin    | Assign employees to a task (body: { userIds: string[] })                                                              |
-| DELETE | /tasks/:id/assign              | Admin    | Remove assignment (body: {userIDs: [])                                                                                                     |
+| DELETE | /tasks/:id/assign              | Admin    | Remove assignment (body: {userIDs: [])                                                                                |
 | POST   | /tasks/request                 | Employee | Request a task to the Admin                                                                                           |
 | GET    | /tasks/requests                | Admin    | View pending task requests                                                                                            |
 | PATCH  | /tasks/requests/:requestId     | Admin    | Approve or reject a request                                                                                           |
