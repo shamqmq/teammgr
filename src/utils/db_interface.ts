@@ -2,6 +2,12 @@ import { db } from '../config/database';
 import { users, tasks, tasks_assignment, tasks_dependence } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 
+// ─── Testing ─────────────────────────────────────────────────
+export async function testDB() {
+ const [record] =  await db.select().from(tasks).limit(0);
+  return record;
+}
+
 // ─── Users ─────────────────────────────────────────────────
 export async function insertUser(data: {
   name: string;

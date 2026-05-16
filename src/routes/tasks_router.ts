@@ -2,7 +2,20 @@ import express, { type Request, type Response } from "express";
 import { adminOnly, authenticate } from "../middleware/auth";
 import { applyQueryParams, parseQueryParams, getFullTasks, type Task } from "../services/tasks";
 import { validate, createTaskSchema, updateTaskSchema } from "../middleware/validation"
-import { deleteTask, getTaskById, getTasksByUser, getUserById, insertTask, updateTask } from "../utils/db_interface";
+import {
+        addDependency,
+        assignUserToTask,
+        deleteTask,
+        getAllUsers,
+        getAssignmentsForTask,
+        getDependenciesForTask,
+        getTaskById,
+        getUserById,
+        insertTask,
+        removeAssignment,
+        removeDependency,
+        updateTask
+} from "../utils/db_interface";
 
 // ### 3. Tasks
 // | Method | Path                           | Access   | Description                                                                                                           |
@@ -11,29 +24,16 @@ import { deleteTask, getTaskById, getTasksByUser, getUserById, insertTask, updat
 // | GET    | /tasks/:id                     | Auth     | Get single task (visibility rules apply)                                                                              |
 // | POST   | /tasks                         | Auth     | Create a task or a request for regular user                                                                           |
 // | PATCH  | /tasks/:id                     | Auth     | Admin: edit any field; Employee: only update status (with business rules)                                             |
-// | DELETE | /tasks/:id                     | Admin    | Delete a task (cascade assignments/dependence)                                                                          |
+// | DELETE | /tasks/:id                     | Admin    | Delete a task (cascade assignments/dependence)                                                                        |
 
 // | POST   | /tasks/:id/assign              | Admin    | Assign employees to a task (body: { userIds: string[] })                                                              |
-// | DELETE | /tasks/:id/assign              | Admin    | Remove assignment (body: {userIDs: [])                                                                                |
+// | DELETE | /tasks/:id/assign/userId       | Admin    | Remove assignment                                                                                                     |
+
 // | GET    | /tasks/:id/dependencies        | Auth     | List all dependencies                                                                                                 |
 // | POST   | /tasks/:id/dependencies        | Admin    | Add dependency                                                                                                        |
 // | DELETE | /tasks/:id/dependencies/:depId | Admin    | Removes dependency                                                                                                    |
 
-// export interface Task {
-//   id: string;
-//   title: string;
-//   description: string;
-//   status: 'requested' | 'todo' | 'in_progress' | 'done';
-//   priority: 'low' | 'medium' | 'high';
-//   assignedTo?: string[];
-//   dependsOn?: string[];
-//   created_at:  Date;
-//   updated_at:  Date;
-//   due_to: Date;
-// }
 
-
-// const statusArr = ['requested', 'todo', 'in_progress', 'done'];
 const STATUS_ORDER = ['requested', 'todo', 'in_progress', 'done'] as const;
 
 
@@ -83,9 +83,9 @@ router.post("/", authenticate, validate(createTaskSchema), async (req: Request, 
         let task = req.body;
         let user = res.locals.user;
         if (task.status == 'requested' && user.role == "admin") {
-               return res.status(400).json({ success: false, error: "admin should not request tasks" });
-        } else if (task.status != 'requested' && user.role == "employee"){
-               return res.status(400).json({ success: false, error: "employees should only post request tasks" });
+                return res.status(400).json({ success: false, error: "admin should not request tasks" });
+        } else if (task.status != 'requested' && user.role == "employee") {
+                return res.status(400).json({ success: false, error: "employees should only post request tasks" });
         }
         let requester = await getUserById(task.created_by);
         if (!requester) {
@@ -98,7 +98,7 @@ router.post("/", authenticate, validate(createTaskSchema), async (req: Request, 
 });
 
 router.patch('/:id', authenticate, validate(updateTaskSchema), async (req: Request, res: Response) => {
-        const taskId = req.params.id;
+        const taskId = req.params.id as string;
         const user = res.locals.user;
         const updates = req.body;
 
@@ -137,14 +137,14 @@ router.patch('/:id', authenticate, validate(updateTaskSchema), async (req: Reque
                 }
 
                 // 3b. Fetch the employee's full visible world (assigned + dependencies)
-                const fullTasks = await getFullTasks({ sub: user.sub, role: user.role });
+                const fullTasks = await getFullTasks(user);
                 const targetTask = fullTasks.find(t => t.id === taskId);
                 if (!targetTask) {
                         return res.status(404).json({ success: false, error: 'Task not found or forbidden.' });
                 }
 
                 // 3c. Only directly assigned tasks can be updated
-                if (!targetTask.assignedTo.includes(user.sub)) {
+                if (!targetTask.assignedTo?.includes(user.sub)) {
                         return res.status(403).json({
                                 success: false,
                                 error: 'You can only update tasks directly assigned to you.',
@@ -167,7 +167,7 @@ router.patch('/:id', authenticate, validate(updateTaskSchema), async (req: Reque
                 // 3e. Dependency rule – only when moving to in_progress
                 if (updates.status === 'in_progress') {
                         // All dependency tasks must be done
-                        const allDone = targetTask.dependsOn.every(depId => {
+                        const allDone = targetTask.dependsOn?.every(depId => {
                                 const depTask = fullTasks.find(t => t.id === depId);
                                 return depTask && depTask.status === 'done';
                         });
@@ -208,5 +208,259 @@ router.delete("/:id", authenticate, adminOnly, async (req: Request, res: Respons
                 data: { message: 'Task deleted successfully', deletedTaskId: taskId },
         });
 });
+
+
+// =================================== tasks assigenment ================================= //
+
+// | POST   | /tasks/:id/assign              | Admin    | Assign employees to a task (body: { userIds: string[] })                                                              |
+// | DELETE | /tasks/:id/assign/userId       | Admin    | Remove assignment                                                                                                     |
+
+
+router.post("/:id/assign", authenticate, adminOnly, async (req: Request, res: Response) => {
+        try {
+                const taskId = req.params.id as string;
+                const userIds: string[] = req.body.userIds;  // expecting array of UUIDs
+
+                // 1. Validate input
+                if (!Array.isArray(userIds) || userIds.length === 0) {
+                        return res.status(400).json({
+                                success: false,
+                                error: 'userIds must be a non-empty array of user IDs',
+                        });
+                }
+
+                // 2. Check if the task exists
+                const task = await getTaskById(taskId);
+                if (!task) {
+                        return res.status(404).json({ success: false, error: 'Task not found' });
+                }
+
+                // 3. Verify that all provided user IDs correspond to actual employees
+                const employees = await getAllUsers();
+
+                // Not all IDs could be employees? Return which ones are bad.
+                const foundIds = employees
+                        .filter(user => user.role === "employee")
+                        .map(user => user.id);
+
+                const invalidIds = userIds.filter(id => !foundIds.includes(id));
+                if (invalidIds.length > 0) {
+                        return res.status(400).json({
+                                success: false,
+                                error: 'Some user IDs are not valid employees',
+                                invalidIds,
+                        });
+                }
+
+                // 4. Fetch existing assignments for the task (to avoid duplicates)
+                const existingAssignments = await getAssignmentsForTask(taskId);
+                const alreadyAssignedIds = existingAssignments.map(a => a.employee_id);
+                const newIds = userIds.filter(id => !alreadyAssignedIds.includes(id));
+
+                if (newIds.length === 0) {
+                        return res.status(200).json({
+                                success: true,
+                                message: 'All users are already assigned to this task',
+                        });
+                }
+
+                // 5. Assign new employees 
+                for (let i = 0; i < newIds.length; i++) {
+                        const record = await assignUserToTask(taskId, newIds[i] as string);
+                        if (!record) return res.status(500).json({ success: false, error: 'Internal server error' });
+                }
+
+                return res.status(200).json({
+                        success: true,
+                        data: {
+                                taskId,
+                                newlyAssigned: newIds,
+                                alreadyAssigned: alreadyAssignedIds,
+                        },
+                });
+
+        } catch (err) {
+                return res.status(500);
+        };
+});
+
+router.delete("/:id/assign/:userId", authenticate, adminOnly, async (req: Request, res: Response) => {
+
+        try {
+                const taskId = req.params.id as string;
+                const employeeId = req.params.userId as string;
+
+                // 1. Verify the task exists
+                const task = await getTaskById(taskId);
+                if (!task) {
+                        return res.status(404).json({ success: false, error: 'Task not found' });
+                }
+
+                // 2. Check if the assignment exists
+                const existingAssignments = await getAssignmentsForTask(taskId);
+                const assignment = existingAssignments.find(a => a.employee_id === employeeId);
+                if (!assignment) {
+                        return res.status(404).json({
+                                success: false,
+                                error: 'User is not assigned to this task',
+                        });
+                }
+
+                // 3. Remove the assignment
+                await removeAssignment(taskId, employeeId);  // you already have this helper
+
+                return res.status(200).json({
+                        success: true,
+                        data: { message: 'Assignment removed', taskId, employeeId },
+                });
+        } catch (error) {
+                return res.status(500);
+        }
+
+});
+
+
+// =================================== tasks dependencies ================================= //
+
+// | GET    | /tasks/:id/dependencies        | Auth     | List all dependencies                                                                                                 |
+// | POST   | /tasks/:id/dependencies        | Admin    | Add dependency                                                                                                        |
+// | DELETE | /tasks/:id/dependencies/:depId | Admin    | Removes dependency                                                                                                    |
+
+router.get('/:id/dependencies', authenticate, async (req: Request, res: Response) => {
+        try {
+                const taskId = req.params.id as string;
+                const user = res.locals.user;
+                // Verify the task exists
+                let userTasks = await getFullTasks(user);
+                const task = userTasks.find(t => t.id == taskId);
+                if (!task) {
+                        return res.status(404).json({ success: false, error: 'Task not found' });
+                }
+
+                // (Optional) Check that the user has access to this task.
+                // For now, we allow any authenticated user to see dependencies.
+
+                const dependencies = await getDependenciesForTask(taskId);
+                // dependencies is an array of { id, required_task_id, dependent_task_id, created_at }
+
+                return res.status(200).json({ success: true, data: dependencies });
+        } catch (error) {
+                return res.status(500);
+        }
+}
+);
+
+
+router.post('/:id/dependencies', authenticate, adminOnly, async (req: Request, res: Response) => {
+
+        try {
+                const taskId = req.params.id as string;               // the dependent task
+                const { requiredTaskId } = req.body;                  // the blocker task
+
+                // 1. Validate input
+                if (!requiredTaskId || typeof requiredTaskId !== 'string') {
+                        return res.status(400).json({
+                                success: false,
+                                error: 'requiredTaskId (UUID) is required',
+                        });
+                }
+
+                // 2. Prevent self-dependency
+                if (taskId === requiredTaskId) {
+                        return res.status(400).json({
+                                success: false,
+                                error: 'A task cannot depend on itself',
+                        });
+                }
+
+                // 3. Both tasks must exist
+                const [task, requiredTask] = await Promise.all([
+                        getTaskById(taskId),
+                        getTaskById(requiredTaskId),
+                ]);
+
+                if (!task) {
+                        return res.status(404).json({ success: false, error: 'Task not found' });
+                }
+                if (!requiredTask) {
+                        return res.status(404).json({
+                                success: false,
+                                error: 'Required task not found',
+                        });
+                }
+
+                // 4. Check for duplicate
+                const existing = await getDependenciesForTask(taskId);
+                const duplicate = existing.find(
+                        (d) => d.required_task_id === requiredTaskId
+                );
+                if (duplicate) {
+                        return res.status(409).json({
+                                success: false,
+                                error: 'This dependency already exists',
+                        });
+                }
+
+                // 5. Detect circular dependency (quick check)
+                // If requiredTaskId already depends on taskId, adding this would create a cycle.
+                const reverseDependencies = await getDependenciesForTask(requiredTaskId);
+                const wouldCycle = reverseDependencies.some(
+                        (d) => d.required_task_id === taskId
+                );
+                if (wouldCycle) {
+                        return res.status(400).json({
+                                success: false,
+                                error: 'Adding this dependency would create a circular chain',
+                        });
+                }
+
+                // 6. Create the dependency
+                const record = await addDependency(taskId, requiredTaskId);
+                return res.status(201).json({ success: true, data: record });
+        } catch (error) {
+                return res.status(500);
+        }
+});
+
+router.delete('/:id/dependencies/:depId', authenticate, adminOnly, async (req: Request, res: Response) => {
+        try {
+                const taskId = req.params.id as string;
+                const requiredTaskId = req.params.depId as string;
+
+                // 1. Verify both tasks exist (optional, but good for error messages)
+                const [task, requiredTask] = await Promise.all([
+                        getTaskById(taskId),
+                        getTaskById(requiredTaskId),
+                ]);
+
+                if (!task) {
+                        return res.status(404).json({ success: false, error: 'Task not found' });
+                }
+                // If requiredTask doesn't exist, the dependency is already broken; still delete the link.
+
+                // 2. Check if the dependency exists
+                const dependencies = await getDependenciesForTask(taskId);
+                const dep = dependencies.find(
+                        (d) => d.required_task_id === requiredTaskId
+                );
+                if (!dep) {
+                        return res.status(404).json({
+                                success: false,
+                                error: 'Dependency not found',
+                        });
+                }
+
+                // 3. Remove the dependency
+                await removeDependency(dep.id);
+
+                return res.status(200).json({
+                        success: true,
+                        data: { message: 'Dependency removed' },
+                });
+        } catch (error) {
+                return res.status(500);
+        }
+}
+);
 
 export default router;
