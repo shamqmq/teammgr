@@ -1,0 +1,55 @@
+services:
+  # --- Backend API (Bun + Express) ---
+  app:
+    build: ./backend
+    container_name: teammgr-api
+    env_file:
+      - ./backend/.env          # injects all your secrets (JWT, DB_URL, etc.)
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - teammgr-net
+    # Only expose to host if you need to call the API directly (optional)
+    # ports:
+    #   - "3000:3000"
+
+  # --- PostgreSQL ---
+  db:
+    image: postgres:15-alpine
+    container_name: teammgr-db
+    env_file:
+      - ./backend/.env          # injects all your secrets (JWT, DB_URL, etc.)
+    # environment:
+    #   POSTGRES_USER: teammgr
+    #   POSTGRES_PASSWORD: teammgr
+    #   POSTGRES_DB: teammgr
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teammgr"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - teammgr-net
+
+  # --- Nginx Reverse Proxy ---
+  nginx:
+    image: nginx:alpine
+    container_name: teammgr-nginx
+    ports:
+      - "80:80"                # the outside world hits this
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app
+    networks:
+      - teammgr-net
+
+volumes:
+  pgdata:
+
+networks:
+  teammgr-net:
+    driver: bridge

@@ -61,43 +61,6 @@ router.post("/login", validate(loginSchema), async (req: Request, res: Response)
         }
 })
 
-// router.post('/refresh', async (req: Request, res: Response) => {
-
-//         const refreshToken = req.cookies?.refreshToken;
-//         if (!refreshToken) {
-//                 return res.status(400).json({ success: false, message: 'Refresh token not found in cookie' });
-//         }
-
-//         try {
-//                 // Verify the token
-//                 const decoded = verifyRefreshToken(refreshToken) as {
-//                         sub: string;
-//                         role: 'admin' | 'employee';
-//                 };
-
-//                 // Generate a fresh access token
-//                 const newAccessToken = signAccessToken({ sub: decoded.sub, role: decoded.role });
-//                 const newRefreshToken = signRefreshToken({ sub: decoded.sub, role: decoded.role });
-
-//                 res.cookie('refreshToken', refreshToken, {
-//                         httpOnly: true,          // not accessible via JavaScript
-//                         // secure: process.env.NODE_ENV === 'production',  // send only over HTTPS in prod
-//                         sameSite: 'strict',
-//                         maxAge: 7 * 24 * 60 * 60 * 1000,   // 7 days (match the token expiry)
-//                         path: '/',
-//                 });
-
-//                 res.status(200).json({
-//                         success: true,
-//                         data: {
-//                                 accessToken: newAccessToken,
-//                                 refreshToken: newRefreshToken,
-//                         },
-//                 });
-//         } catch (error) {
-//                 res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
-//         }
-// });
 router.post('/refresh', async (req: Request, res: Response) => {
         const refreshToken = req.cookies?.refreshToken;
         if (!refreshToken) {

@@ -219,7 +219,7 @@ router.delete("/:id", authenticate, adminOnly, async (req: Request, res: Respons
 router.post("/:id/assign", authenticate, adminOnly, async (req: Request, res: Response) => {
         try {
                 const taskId = req.params.id as string;
-                const userIds: string[] = req.body.userIds;  // expecting array of UUIDs
+                const userIds: string[] = req.body.userIDs;  // expecting array of UUIDs
 
                 // 1. Validate input
                 if (!Array.isArray(userIds) || userIds.length === 0) {
