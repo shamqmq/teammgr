@@ -91,7 +91,7 @@ router.patch("/me", authenticate, validate(updateUserSchema), async (req, res) =
 
                 // Strip password_hash from response
                 const { password_hash, ...cleanUser } = updatedUser;
-                res.status(200).json({ user: cleanUser });
+          res.status(200).json({success: true, user: cleanUser });
         } catch (error) {
                 console.error("Update user error:", error);
                 res.status(500).json({ error: "Internal server error" });

@@ -31,7 +31,6 @@ deployment.
 | Database         | PostgreSQL                    |
 | ORM              | Drizzle                       |
 | Authentication   | JWT (access + refresh tokens) |
-| Testing          | Jest                          |
 | Validatation     | Zod                           |
 | Containerisation | Docker, Docker Compose        |
 | Reverse Proxy    | Nginx                         |
@@ -148,14 +147,6 @@ All endpoints prefixed with `/api/`. It redirects automatically to auth
 
 ---
 
-## Testing Strategy
-- **Unit tests (Jest)** – cover services, utilities, and middleware in isolation. Mock ORM with `jest-mock-extended` or a factory.
-- **Integration tests** – start the Express app (without listening) and test full request‑response cycles against a real test database.
-- **Test database**: separate database or schema; run migrations before test suite.
-- **Example test**: POST /auth/register → should return 201 and valid tokens.
-
----
-
 ## Deployment & Infrastructure
 - **Docker Compose** runs three services:
  1. `app`   – Bun Express server (built from Dockerfile).
@@ -165,12 +156,3 @@ All endpoints prefixed with `/api/`. It redirects automatically to auth
 - **Multi‑stage Dockerfile**: builder stage runs `tsc`, final stage runs the compiled JavaScript with only production dependencies.
 
 ---
-
-## Additional “Optional” Features
-- **API documentation**
-- **Rate limiting**
-- **Logging**
-- **Pagination helper**
-- **Caching**           : use Redis for dependency tree lookups (future).
-- **Queue**             : use Bull for sending emails on task assignment.
-- **Tasks Comments**    : leaving comments in tasks. it may be stored in tasks table in json formats or having a separate table with a forien key in the tasks table
