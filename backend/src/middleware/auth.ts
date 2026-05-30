@@ -62,7 +62,7 @@ export function adminOnly(_req: Request, res: Response, next: NextFunction) {
         }
 
         if (user.role === 'admin') {
-                next();
+                return next();
         }
         return res.status(403).json({ error: 'Forbidden: insufficient permissions' });
 };

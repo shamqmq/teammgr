@@ -6,6 +6,7 @@ import {
         addDependency,
         assignUserToTask,
         deleteTask,
+        getAllTasks,
         getAllUsers,
         getAssignmentsForTask,
         getDependenciesForTask,
@@ -40,26 +41,49 @@ const STATUS_ORDER = ['requested', 'todo', 'in_progress', 'done'] as const;
 
 const router = express.Router();
 
-router.get("/", authenticate, async (req: Request, res: Response) => {
-        const user = res.locals.user;
-        const query = parseQueryParams(req);
-        let allTasks: Task[];
-        try {
-                allTasks = await getFullTasks(user)
-                const { tasks, meta } = applyQueryParams(allTasks, query);
+// GET /api/tasks
+// This handles the search for your dependencies: /api/tasks?search=Fix
+router.get("/", authenticate, async (req, res) => {
+  try {
+    let allTasks = await getAllTasks(); // Use your actual DB fetch function
+    
+    const searchQuery = req.query.search as string;
 
-                res.status(200).json({
-                        success: true,
-                        data: tasks,
-                        meta,
-                });
-        } catch (err) {
-                if (err == "Forbidden")
-                        return res.status(403).json({ success: false, error: "Forbidden" });
-        }
-        // Apply filters, sorting, pagination
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      
+      // 1. The Giant Net: Catch any task with a matching title
+      let filteredTasks = allTasks.filter(task => 
+        task.title && task.title.toLowerCase().includes(lowerQuery)
+      );
+
+      // 2. The Smart Sorter: Push exact matches to the top
+      allTasks = filteredTasks.sort((a, b) => {
+        const aTitle = (a.title || '').toLowerCase();
+        const bTitle = (b.title || '').toLowerCase();
+
+        // Priority 1: Exact Match
+        if (aTitle === lowerQuery && bTitle !== lowerQuery) return -1;
+        if (bTitle === lowerQuery && aTitle !== lowerQuery) return 1;
+
+        // Priority 2: Starts With
+        const aStarts = aTitle.startsWith(lowerQuery);
+        const bStarts = bTitle.startsWith(lowerQuery);
+        if (aStarts && !bStarts) return -1;
+        if (bStarts && !aStarts) return 1;
+
+        // Priority 3: Contains (Alphabetical)
+        return aTitle.localeCompare(bTitle);
+      });
+    }
+
+    // Return the sorted list to the SearchBox
+    return res.status(200).json({ data: allTasks });
+    
+  } catch (error) {
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });
-
 
 router.get("/:id", authenticate, async (req: Request, res: Response) => {
 

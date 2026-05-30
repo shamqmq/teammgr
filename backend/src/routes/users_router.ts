@@ -13,21 +13,56 @@ const router = express.Router();
 //| PATCH  | /users/:id    | Admin/Self | Update profile             |
 //| DELETE | /users/:id    | Admin      | Delete user                |
 
-// General
-// router.use(authenticate)
-
 // GET /api/users
-router.get("/", authenticate, adminOnly, async (_req, res) => {
-        try {
-                const allUsers = await getAllUsers();
-                // Remove password_hash from each user
-                const users = allUsers.map(({ password_hash, ...user }) => user);
-                res.status(200).json({ users });
-        } catch (error) {
-                res.status(500).json({ error: "Internal server error" });
-        }
-});
+// Supports optional search: /api/users?search=John
+router.get("/", authenticate, async (req, res) => {
+  try {
+    // 1. Fetch all users from your database
+    let allUsers = await getAllUsers(); // Replace with your actual DB call
+    
+    const searchQuery = req.query.search as string;
 
+    // 2. If the frontend sent a search query, filter and sort
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      
+      // Filter: The "Giant Net" (matches name or email)
+      let filteredUsers = allUsers.filter(user => 
+        (user.name && user.name.toLowerCase().includes(lowerQuery)) || 
+        (user.email && user.email.toLowerCase().includes(lowerQuery))
+      );
+
+      // Sort: The "Smart Sorter"
+      allUsers = filteredUsers.sort((a, b) => {
+        const aName = (a.name || '').toLowerCase();
+        const bName = (b.name || '').toLowerCase();
+
+        // Priority 1: Exact Match
+        if (aName === lowerQuery && bName !== lowerQuery) return -1;
+        if (bName === lowerQuery && aName !== lowerQuery) return 1;
+
+        // Priority 2: Starts With
+        const aStarts = aName.startsWith(lowerQuery);
+        const bStarts = bName.startsWith(lowerQuery);
+        if (aStarts && !bStarts) return -1;
+        if (bStarts && !aStarts) return 1;
+
+        // Priority 3: Alphabetical
+        return aName.localeCompare(bName);
+      });
+    }
+
+    // 3. Strip out passwords before sending to the frontend!
+    const users = allUsers.map(({ password_hash, ...user }) => user);
+    
+    // 4. Send back the exactly structure the frontend expects
+    return res.status(200).json({ users });
+    
+  } catch (error) {
+    console.error("Failed to fetch users:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // GET /api/users/me
 router.get("/me", authenticate, async (_req, res) => {

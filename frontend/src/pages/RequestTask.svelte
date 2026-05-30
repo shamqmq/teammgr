@@ -6,7 +6,7 @@
   let title = $state('');
   let description = $state('');
   let priority = $state('medium');
-  let due_date = $state('');        // YYYY-MM-DD from date input
+  let due_date = $state('');
   let loading = $state(false);
   let error = $state('');
 
@@ -14,12 +14,9 @@
     e.preventDefault();
     loading = true;
     error = '';
-    try {
-      // Convert date to ISO string (set time to midnight UTC)
-      const due_to = due_date
-        ? new Date(due_date + 'T00:00:00Z').toISOString()
-        : null;
 
+    try {
+      const due_to = due_date ? new Date(due_date + 'T00:00:00Z').toISOString() : null;
       const res = await apiFetch('/api/tasks', {
         method: 'POST',
         body: JSON.stringify({
@@ -32,7 +29,8 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create request');
-      goTo('employee-dashboard');
+      
+      goTo('dashboard');
     } catch (err) {
       error = err.message;
     } finally {

@@ -5,97 +5,108 @@
 
   let { goTo } = $props();
 
-  let tasks = $state([]);
-  let requests = $state([]);
+  let allTasks = $state([]);
   let users = $state([]);
   let loading = $state(true);
+  let actionError = $state('');
+
+  // Derived state to auto-update lists
+  let requests = $derived(allTasks.filter(t => t.status === 'requested'));
+  let activeTasks = $derived(allTasks.filter(t => t.status !== 'requested'));
 
   onMount(async () => {
     try {
-      const [tasksRes, requestsRes, usersRes] = await Promise.all([
+      const [tasksRes, usersRes] = await Promise.all([
         apiFetch('/api/tasks?limit=100'),
-        apiFetch('/api/tasks/requests'),
-        apiFetch('/api/users?limit=100'),
+        apiFetch('/api/users'),
       ]);
       
+      if (!tasksRes.ok) throw new Error('Failed to load tasks');
       const tasksData = await tasksRes.json();
-      const requestsData = await requestsRes.json();
-      const usersData = await usersRes.json();
+      allTasks = tasksData.data || [];
 
-      tasks = tasksData.data || [];
-      requests = requestsData.data || [];
-      users = usersData.data || [];
+      if (!usersRes.ok) {
+        throw new Error('Failed to load users');
+      }
+      const usersData = await usersRes.json();
+      // Ensure we set users correctly based on your API response structure
+      users = usersData.users || usersData.data || []; 
     } catch (e) {
       console.error('Failed to load admin data', e);
+      actionError = e.message;
     } finally {
       loading = false;
     }
   });
 
-  async function approveRequest(requestId) {
-    await apiFetch(`/api/tasks/requests/${requestId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'approved' }),
-    });
-    // Reload requests
-    const res = await apiFetch('/api/tasks/requests');
-    const data = await res.json();
-    requests = data.data || [];
+  async function handleRequest(taskId, isApproved) {
+    actionError = '';
+    try {
+      const newStatus = isApproved ? 'todo' : 'rejected';
+      const res = await apiFetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Failed to update request');
+      allTasks = allTasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t);
+    } catch (e) {
+      actionError = e.message;
+    }
   }
 </script>
 
-<div>
-  <h1>Admin Dashboard</h1>
-  <p>Welcome, {$auth.user?.name || $auth.user?.email}</p>
+<header>
+  <h1>Admin Control Center</h1>
+  <p>System Admin: {$auth.user?.name || $auth.user?.email}</p>
+  <nav style="margin-bottom: 2rem;">
+    <button onclick={() => goTo('add-task')}>+ Create New Task</button>
+  </nav>
+</header>
 
-  <div style="display: flex; gap: 0.5rem; margin: 1rem 0;">
-    <button on:click={() => goTo('edit-profile')}>Edit Profile</button>
-    <button on:click={() => goTo('request-task')}>Create Task</button>
-  </div>
+<main>
+  {#if actionError}
+    <div style="color: red; padding: 1rem; border: 1px solid red; margin-bottom: 1rem;">
+      Error: {actionError}
+    </div>
+  {/if}
 
   {#if loading}
-    <p>Loading admin dashboard...</p>
+    <p>Loading dashboard...</p>
   {:else}
-    <!-- Pending Requests -->
-    <div style="margin-bottom: 2rem;">
-      <h2>Pending Requests ({requests.length})</h2>
-      {#if requests.length === 0}
-        <p>No pending requests.</p>
-      {:else}
-        <ul>
-          {#each requests as req (req.id)}
-            <li>
-              <strong>{req.title}</strong> – {req.description?.slice(0, 40)}...
-              <button on:click={() => approveRequest(req.id)}>Approve</button>
-              <button>Reject</button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </div>
+    <section>
+      <h2>Pending Employee Requests ({requests.length})</h2>
+      {#each requests as req (req.id)}
+        <div style="border: 1px solid #ddd; padding: 1rem; margin-bottom: 0.5rem;">
+          <strong>{req.title}</strong>
+          <p>{req.description || 'No description'}</p>
+          <button onclick={() => handleRequest(req.id, true)}>Approve</button>
+          <button onclick={() => handleRequest(req.id, false)}>Reject</button>
+        </div>
+      {/each}
+    </section>
 
-    <!-- All Tasks -->
-    <div style="margin-bottom: 2rem;">
-      <h2>All Tasks ({tasks.length})</h2>
+    <section style="margin-top: 2rem;">
+      <h2>Active Tasks</h2>
       <ul>
-        {#each tasks as task (task.id)}
+        {#each activeTasks as task (task.id)}
           <li>
-            <button on:click={() => goTo('task-detail', task.id)}>
-              {task.title} – {task.status}
+            <button onclick={() => goTo('task-detail', task.id)}>
+              {task.title}
             </button>
+            <small>({task.status})</small>
+            <button onclick={() => goTo('edit-task', task.id)}>Edit</button>
           </li>
         {/each}
       </ul>
-    </div>
+    </section>
 
-    <!-- Users -->
-    <div>
-      <h2>Users ({users.length})</h2>
+    <section style="margin-top: 2rem;">
+      <h2>System Users</h2>
       <ul>
         {#each users as user (user.id)}
-          <li>{user.name || user.email} – {user.role}</li>
+          <li>{user.name} - {user.email}</li>
         {/each}
       </ul>
-    </div>
+    </section>
   {/if}
-</div>
+</main>
