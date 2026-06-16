@@ -174,3 +174,33 @@ export async function getTasksThatDependOn(task_id: string) {
 export async function removeDependency(id: string) {
   await db.delete(tasks_dependence).where(eq(tasks_dependence.id, id));
 }
+
+// Add this at the bottom of db_interface.ts, before exports end
+export async function getTaskWithDetails(id: string) {
+  const task = await getTaskById(id);
+  if (!task) return null;
+
+  const [assignments, dependencies] = await Promise.all([
+    getAssignmentsForTask(id),
+    getDependenciesForTask(id),
+  ]);
+
+  // Turn UUIDs into user objects with names
+  const assignedTo = [];
+  for (const a of assignments) {
+    const user = await getUserById(a.employee_id);
+    if (user) {
+      const { password_hash, ...safe } = user;
+      assignedTo.push(safe);
+    }
+  }
+
+  // Turn dependency IDs into task objects with titles
+  const deps = [];
+  for (const d of dependencies) {
+    const t = await getTaskById(d.required_task_id);
+    if (t) deps.push({ id: t.id, title: t.title, status: t.status });
+  }
+
+  return { ...task, assignedTo, dependencies: deps };
+}

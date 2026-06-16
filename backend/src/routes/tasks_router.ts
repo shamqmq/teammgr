@@ -11,6 +11,7 @@ import {
         getAssignmentsForTask,
         getDependenciesForTask,
         getTaskById,
+        getTaskWithDetails,
         getUserById,
         insertTask,
         removeAssignment,
@@ -44,85 +45,110 @@ const router = express.Router();
 // GET /api/tasks
 // This handles the search for your dependencies: /api/tasks?search=Fix
 router.get("/", authenticate, async (req, res) => {
-  try {
-    const user = res.locals.user;
-    let allTasks = await getFullTasks(user);
+        try {
+                const user = res.locals.user;
+                let allTasks = await getFullTasks(user);
 
-    const searchQuery = req.query.search as string;
+                const searchQuery = req.query.search as string;
 
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      let filteredTasks = allTasks.filter(task =>
-        task.title && task.title.toLowerCase().includes(lowerQuery)
-      );
-      allTasks = filteredTasks.sort((a, b) => {
-        const aTitle = (a.title || '').toLowerCase();
-        const bTitle = (b.title || '').toLowerCase();
-        if (aTitle === lowerQuery && bTitle !== lowerQuery) return -1;
-        if (bTitle === lowerQuery && aTitle !== lowerQuery) return 1;
-        const aStarts = aTitle.startsWith(lowerQuery);
-        const bStarts = bTitle.startsWith(lowerQuery);
-        if (aStarts && !bStarts) return -1;
-        if (bStarts && !aStarts) return 1;
-        return aTitle.localeCompare(bTitle);
-      });
-    }
+                if (searchQuery) {
+                        const lowerQuery = searchQuery.toLowerCase();
+                        let filteredTasks = allTasks.filter(task =>
+                                task.title && task.title.toLowerCase().includes(lowerQuery)
+                        );
+                        allTasks = filteredTasks.sort((a, b) => {
+                                const aTitle = (a.title || '').toLowerCase();
+                                const bTitle = (b.title || '').toLowerCase();
+                                if (aTitle === lowerQuery && bTitle !== lowerQuery) return -1;
+                                if (bTitle === lowerQuery && aTitle !== lowerQuery) return 1;
+                                const aStarts = aTitle.startsWith(lowerQuery);
+                                const bStarts = bTitle.startsWith(lowerQuery);
+                                if (aStarts && !bStarts) return -1;
+                                if (bStarts && !aStarts) return 1;
+                                return aTitle.localeCompare(bTitle);
+                        });
+                }
 
-    // EMPLOYEES: only show tasks they are directly assigned to
-    if (user.role === 'employee') {
-      allTasks = allTasks.filter(t => t.assignedTo?.includes(user.sub));
-    }
+                // EMPLOYEES: only show tasks they are directly assigned to
+                if (user.role === 'employee') {
+                        allTasks = allTasks.filter(t => t.assignedTo?.includes(user.sub));
+                }
 
-    // Pagination
-    const params = parseQueryParams(req);
-    const result = applyQueryParams(allTasks, params);
+                // Pagination
+                const params = parseQueryParams(req);
+                const result = applyQueryParams(allTasks, params);
 
-    return res.status(200).json({
-      data: result.tasks,
-      total: result.meta.total,
-      page: result.meta.page,
-      totalPages: result.meta.totalPages,
-    });
+                return res.status(200).json({
+                        data: result.tasks,
+                        total: result.meta.total,
+                        page: result.meta.page,
+                        totalPages: result.meta.totalPages,
+                });
 
-  } catch (error) {
-    if (error == "Forbidden") return res.status(403).json({ success: false, error: "Forbidden" });
-    console.error("GET /tasks error:", error);
-    return res.status(500).json({ error: "Internal server error" });
-  }
+        } catch (error) {
+                if (error == "Forbidden") return res.status(403).json({ success: false, error: "Forbidden" });
+                console.error("GET /tasks error:", error);
+                return res.status(500).json({ error: "Internal server error" });
+        }
 });
 
 router.get("/:id", authenticate, async (req: Request, res: Response) => {
+  const user = res.locals.user;
+  const taskId = req.params.id as string;
 
-        const user = res.locals.user;
-        const taskId = req.params.id;
-        try {
-                const tasks = await getFullTasks(user);
-                var task = tasks.find(t => (t.id == taskId));
-        } catch (err) {
-                if (err == "Forbidden") return res.status(403).json({ success: false, error: "Forbidden" });
-                return res.status(500).json({ success: false, error: "Internal Server Error" });
-        }
-        res.status(200).json({
-                success: true,
-                data: task,
-        });
+  try {
+    const task = await getTaskWithDetails(taskId);
+    if (!task) {
+      return res.status(404).json({ success: false, error: 'Task not found' });
+    }
 
+    // Employees can only see their own assigned tasks
+    if (user.role === 'employee') {
+      const isAssigned = task.assignedTo?.some(u => u.id === user.sub);
+      if (!isAssigned) {
+        return res.status(404).json({ success: false, error: 'Task not found' });
+      }
+    }
+
+    return res.status(200).json({ success: true, data: task });
+
+  } catch (err) {
+    console.error('GET /tasks/:id error:', err);
+    return res.status(500).json({ success: false, error: 'Internal Server Error' });
+  }
 });
 
 router.post("/", authenticate, validate(createTaskSchema), async (req: Request, res: Response) => {
         let task = req.body;
         let user = res.locals.user;
+
         if (task.status == 'requested' && user.role == "admin") {
                 return res.status(400).json({ success: false, error: "admin should not request tasks" });
         } else if (task.status != 'requested' && user.role == "employee") {
                 return res.status(400).json({ success: false, error: "employees should only post request tasks" });
         }
+
         let requester = await getUserById(task.created_by);
         if (!requester) {
                 task.created_by = res.locals.user.sub;
         }
+
         const data = await insertTask(task);
-        if (!data) return res.status(500).json({ success: false, erorr: "Fallen Data Base" });
+        if (!data) return res.status(500).json({ success: false, error: "Database error" });
+
+        // Handle assignments
+        if (task.assigned_to && Array.isArray(task.assigned_to)) {
+                for (const userId of task.assigned_to) {
+                        await assignUserToTask(data.id, userId);
+                }
+        }
+
+        // Handle dependencies
+        if (task.dependency_ids && Array.isArray(task.dependency_ids)) {
+                for (const depId of task.dependency_ids) {
+                        await addDependency(depId, data.id);
+                }
+        }
 
         return res.status(201).json({ success: true, task: data });
 });
@@ -146,9 +172,45 @@ router.patch('/:id', authenticate, validate(updateTaskSchema), async (req: Reque
                 if (!updated) {
                         return res.status(404).json({ success: false, error: 'Task not found.' });
                 }
+
+                // Sync assignments
+                if (updates.assigned_to !== undefined) {
+                        const existing = await getAssignmentsForTask(taskId);
+                        const existingIds = new Set(existing.map(a => a.employee_id));
+                        const newIds = updates.assigned_to as string[];
+
+                        for (const oldId of existingIds) {
+                                if (!newIds.includes(oldId)) {
+                                        await removeAssignment(taskId, oldId);
+                                }
+                        }
+                        for (const newId of newIds) {
+                                if (!existingIds.has(newId)) {
+                                        await assignUserToTask(taskId, newId);
+                                }
+                        }
+                }
+
+                // Sync dependencies
+                if (updates.dependency_ids !== undefined) {
+                        const existing = await getDependenciesForTask(taskId);
+                        const existingMap = new Map(existing.map(d => [d.required_task_id, d.id]));
+                        const newIds = updates.dependency_ids as string[];
+
+                        for (const [reqId, recordId] of existingMap) {
+                                if (!newIds.includes(reqId)) {
+                                        await removeDependency(recordId);
+                                }
+                        }
+                        for (const newId of newIds) {
+                                if (!existingMap.has(newId)) {
+                                        await addDependency(newId, taskId);
+                                }
+                        }
+                }
+
                 return res.status(200).json({ success: true, task: updated });
         }
-
         // 3. Employee logic
         if (user.role === 'employee') {
                 // 3a. Employees can ONLY update the status field

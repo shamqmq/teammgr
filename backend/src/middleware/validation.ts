@@ -46,45 +46,52 @@ export function isValidUUID(uuid: string): boolean {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         return uuidRegex.test(uuid);
 }
+
 // Base schema for shared fields
 const taskBase = {
-        title: z
-                .string()
-                .trim()
-                .min(3, 'Title must be at least 3 characters')
-                .max(100, 'Title cannot exceed 100 characters'),
-        description: z
-                .string()
-                .trim()
-                .min(10, 'Description must be at least 10 characters')
-                .max(2000, 'Description too long'),
-        status: z.enum(['requested', 'todo', 'in_progress', 'done']),
-        priority: z.enum(['low', 'medium', 'high']),
-        due_to: z
-                .string()
-                .datetime({ message: 'Invalid ISO date string' })
-                .or(z.date())
-                .transform((val) => (val instanceof Date ? val : new Date(val)))
+  title: z
+    .string()
+    .trim()
+    .min(3, 'Title must be at least 3 characters')
+    .max(100, 'Title cannot exceed 100 characters'),
+  description: z
+    .string()
+    .trim()
+    .min(10, 'Description must be at least 10 characters')
+    .max(2000, 'Description too long'),
+  status: z.enum(['requested', 'todo', 'in_progress', 'done']),
+  priority: z.enum(['low', 'medium', 'high']),
+  due_to: z
+    .string()
+    .datetime({ message: 'Invalid ISO date string' })
+    .or(z.date())
+    .transform((val) => (val instanceof Date ? val : new Date(val)))
+    .nullable()
+    .optional(),
 };
 
-// Schema for creating a task (all required)
+// Schema for creating a task
 export const createTaskSchema = z.object({
-        title: taskBase.title,
-        description: taskBase.description,
-        priority: taskBase.priority,
-        status: taskBase.status,
-        due_to: taskBase.due_to,
+  title: taskBase.title,
+  description: taskBase.description,
+  priority: taskBase.priority,
+  status: taskBase.status,
+  due_to: taskBase.due_to,
+  assigned_to: z.array(z.string().uuid()).optional(),
+  dependency_ids: z.array(z.string().uuid()).optional(),
 });
 
-// Schema for updating a task (all fields optional, but at least one required)
+// Schema for updating a task
 export const updateTaskSchema = z.object({
-        title: taskBase.title.optional(),
-        description: taskBase.description.optional(),
-        status: taskBase.status.optional(),
-        priority: taskBase.priority.optional(),
-        due_to: taskBase.due_to.optional(),
+  title: taskBase.title.optional(),
+  description: taskBase.description.optional(),
+  status: taskBase.status.optional(),
+  priority: taskBase.priority.optional(),
+  due_to: taskBase.due_to,
+  assigned_to: z.array(z.string().uuid()).optional(),
+  dependency_ids: z.array(z.string().uuid()).optional(),
 }).refine(data => Object.keys(data).length > 0, {
-        message: 'At least one field must be provided for update',
+  message: 'At least one field must be provided for update',
 });
 
 // Type inference for TypeScript usage

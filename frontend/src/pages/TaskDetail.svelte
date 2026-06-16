@@ -4,11 +4,13 @@
   import { apiFetch } from '../lib/api';
 
   let { goTo, taskId } = $props();
+
   let task = $state(null);
   let dependencies = $state([]);
   let loading = $state(true);
   let error = $state('');
   let actionLoading = $state(false);
+  let showModal = $state(false);
 
   async function loadTask() {
     loading = true;
@@ -45,7 +47,23 @@
     }
   }
 
-  let dependenciesMet = $derived(dependencies.length === 0 || dependencies.every(dep => dep.status === 'done'));
+  async function confirmDelete() {
+    actionLoading = true;
+    try {
+      const res = await apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete task');
+      goTo($auth.user?.role === 'admin' ? 'admin-dashboard' : 'dashboard');
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      actionLoading = false;
+      showModal = false;
+    }
+  }
+
+  let dependenciesMet = $derived(
+    dependencies.length === 0 || dependencies.every(dep => dep.status === 'done')
+  );
 </script>
 
 <main class="page">
@@ -70,7 +88,9 @@
         </div>
         <div class="detail-row">
           <span class="detail-label">Priority</span>
-          <span class="detail-value text-yellow">{task.priority}</span>
+          <span class="badge">
+                <span class="badge-inline badge-priority-{task.priority}">{task.priority}</span>
+          </span>
         </div>
         <div class="detail-row">
           <span class="detail-label">Due Date</span>
@@ -78,7 +98,7 @@
         </div>
         <div class="detail-row">
           <span class="detail-label">Assigned To</span>
-          <span class="detail-value">{task.assignedTo?.length ? task.assignedTo.map(u => u.name || u.email).join(', ') : 'Unassigned'}</span>
+          <span class="detail-value">{task.assignedTo?.length ? task.assignedTo.map(u => u.name || u.email || u.id).join(', ') : 'Unassigned'}</span>
         </div>
       </div>
 
@@ -99,23 +119,48 @@
         </div>
       {/if}
 
-      <div class="flex gap-sm">
-        {#if task.status === 'todo'}
-          <button disabled={actionLoading || !dependenciesMet} onclick={() => updateStatus('in_progress')} class="btn btn-primary">
-            {actionLoading ? '...' : 'Start Task →'}
-          </button>
-        {:else if task.status === 'in_progress'}
-          <button disabled={actionLoading || !dependenciesMet} onclick={() => updateStatus('done')} class="btn btn-success">
-            {actionLoading ? '...' : 'Mark as Done ✓'}
-          </button>
-        {/if}
+      <div class="flex justify-between items-center" style="flex-wrap: wrap; gap: var(--space-sm);">
+        <div class="btn-group">
+          {#if task.status === 'todo'}
+            <button disabled={actionLoading || !dependenciesMet} onclick={() => updateStatus('in_progress')} class="btn btn-primary">
+              {actionLoading ? '...' : 'Start Task →'}
+            </button>
+          {:else if task.status === 'in_progress'}
+            <button disabled={actionLoading || !dependenciesMet} onclick={() => updateStatus('done')} class="btn btn-success">
+              {actionLoading ? '...' : 'Mark as Done ✓'}
+            </button>
+          {/if}
+        </div>
 
-        {#if $auth.user?.role === 'admin'}
-          <button onclick={() => goTo('edit-task', taskId)} class="btn btn-secondary">Edit Task</button>
-        {/if}
-
-        <button onclick={() => goTo('dashboard')} class="btn btn-secondary" style="margin-left: auto;">← Back</button>
+        <div class="btn-group">
+          {#if $auth.user?.role === 'admin'}
+            <button onclick={() => goTo('edit-task', taskId)} class="btn btn-secondary">Edit</button>
+            <button onclick={() => showModal = true} class="btn btn-danger">Delete</button>
+          {/if}
+          <button onclick={() => goTo('dashboard')} class="btn btn-secondary">← Back</button>
+        </div>
       </div>
+    </div>
+  {:else}
+    <div class="card" style="padding: 2rem;">
+      <div class="alert alert-error">Task not found or you don't have access.</div>
+      <button onclick={() => goTo('dashboard')} class="btn btn-secondary mt-sm">← Back</button>
     </div>
   {/if}
 </main>
+
+{#if showModal}
+  <div class="modal-overlay" onclick={() => showModal = false}>
+    <div class="modal-card" onclick={(e) => e.stopPropagation()}>
+      <div class="modal-title">Delete Task</div>
+      <div class="modal-text">
+        Are you sure you want to delete <strong>{task?.title}</strong>?<br>
+        This action cannot be undone.
+      </div>
+      <div class="modal-actions">
+        <button onclick={() => showModal = false} class="btn btn-secondary">Cancel</button>
+        <button onclick={confirmDelete} class="btn btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+{/if}
