@@ -1,53 +1,34 @@
 <script>
   import { onMount } from 'svelte';
   import { apiFetch } from '../lib/api';
-  import SearchBox from '../components/SearchBox.svelte'; // Make sure you created this file!
+  import SearchBox from '../components/SearchBox.svelte';
 
-  // Svelte 5 Props
   let { taskId = null, goTo } = $props();
 
-  // Basic Task Details
   let title = $state('');
   let description = $state('');
   let status = $state('todo');
   let due_to = $state('');
-
-  // Complex Relational Data
-  let assignedUser = $state(null); // Holds the single assigned user object
-  let dependencies = $state([]);   // Holds an array of task objects
-
-  // UI State
+  let assignedUsers = $state([]);
+  let dependencies = $state([]);
   let loading = $state(false);
-  let pageLoading = $state(!!taskId); // Only true initially if we are editing
+  let pageLoading = $state(!!taskId);
   let error = $state('');
 
-  // If taskId is provided, fetch existing data (Edit Mode)
   onMount(async () => {
     if (taskId) {
       try {
         const res = await apiFetch(`/api/tasks/${taskId}`);
         if (!res.ok) throw new Error('Failed to load task details.');
         const data = await res.json();
-        
-        // Ensure this matches your API response structure (e.g., data.data or data.task)
         const task = data.data || data.task || data;
-
         title = task.title || '';
         description = task.description || '';
         status = task.status || 'todo';
-        
-        if (task.due_to) {
-          due_to = new Date(task.due_to).toISOString().split('T')[0];
-        }
-
-        // If the task already has an assigned user/dependencies, populate them!
-        if (task.assigned_to) {
-           assignedUser = task.assignedUser || { id: task.assigned_to, name: 'Assigned User' };
-        }
-        if (task.dependencies) {
-           dependencies = task.dependencies;
-        }
-
+        if (task.due_to) due_to = new Date(task.due_to).toISOString().split('T')[0];
+        const existing = task.assignedUsers || task.assignedTo || task.assigned_to || [];
+        assignedUsers = Array.isArray(existing) ? existing : existing ? [existing] : [];
+        if (task.dependencies) dependencies = task.dependencies;
       } catch (e) {
         error = e.message;
       } finally {
@@ -56,53 +37,36 @@
     }
   });
 
-  // --- Dependency Management Functions ---
+  function addAssignee(user) {
+    if (!assignedUsers.find(u => u.id === user.id)) assignedUsers = [...assignedUsers, user];
+  }
+  function removeAssignee(id) { assignedUsers = assignedUsers.filter(u => u.id !== id); }
   function addDependency(task) {
-    // Check if it's already in the list so we don't add duplicates
-    if (!dependencies.find(d => d.id === task.id)) {
-      dependencies = [...dependencies, task];
-    }
+    if (!dependencies.find(d => d.id === task.id)) dependencies = [...dependencies, task];
   }
+  function removeDependency(id) { dependencies = dependencies.filter(d => d.id !== id); }
 
-  function removeDependency(idToRemove) {
-    // Filter out the one we want to remove
-    dependencies = dependencies.filter(d => d.id !== idToRemove);
-  }
-
-  // --- Form Submission ---
   async function handleSubmit(e) {
     e.preventDefault();
     loading = true;
     error = '';
-
-    // Build the payload EXACTLY how the backend needs it
     const payload = {
       title,
       description,
       status,
       due_to: due_to ? new Date(due_to).toISOString() : null,
-      // Send only the ID of the user
-      assigned_to: assignedUser ? assignedUser.id : null,
-      // Map the array of full dependency objects down to just an array of their IDs
-      dependency_ids: dependencies.map(dep => dep.id) 
+      assigned_to: assignedUsers.map(u => u.id),
+      dependency_ids: dependencies.map(dep => dep.id)
     };
-
     try {
       const method = taskId ? 'PATCH' : 'POST';
       const endpoint = taskId ? `/api/tasks/${taskId}` : '/api/tasks';
-      
-      const res = await apiFetch(endpoint, {
-        method,
-        body: JSON.stringify(payload)
-      });
-
+      const res = await apiFetch(endpoint, { method, body: JSON.stringify(payload) });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to save task');
       }
-
-      // Success! Go back to the dashboard
-      goTo('admin-dashboard'); 
+      goTo('admin-dashboard');
     } catch (e) {
       error = e.message;
     } finally {
@@ -111,107 +75,84 @@
   }
 </script>
 
-<main style="max-width: 600px; margin: 0 auto; padding: 2rem;">
-  <header style="margin-bottom: 1.5rem;">
-    <h2>{taskId ? 'Edit Task' : 'Create New Task'}</h2>
-  </header>
-
+<main class="page-sm">
   {#if pageLoading}
-    <p>Loading task data...</p>
+    <div class="card text-center text-muted" style="padding: 3rem;">Loading task data...</div>
   {:else}
-    <form onsubmit={handleSubmit} style="display: flex; flex-direction: column; gap: 1.5rem;">
-      
-      {#if error}
-        <div style="background: #ffe6e6; color: #d8000c; padding: 1rem; border-radius: 4px;">
-          {error}
+    <div class="card">
+      <header style="margin-bottom: 2rem;">
+        <h1>{taskId ? 'Edit Task' : 'Create New Task'}</h1>
+        <p class="text-muted">{taskId ? 'Update task details and assignments.' : 'Define a new task for your team.'}</p>
+      </header>
+
+      <form onsubmit={handleSubmit} class="flex flex-col gap-sm">
+        {#if error}<div class="alert alert-error">{error}</div>{/if}
+
+        <div class="form-group">
+          <label for="title">Title *</label>
+          <input id="title" type="text" bind:value={title} required />
         </div>
-      {/if}
-
-      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-        <label for="title" style="font-weight: bold;">Title *</label>
-        <input id="title" type="text" bind:value={title} required style="padding: 0.5rem;" />
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-        <label for="description" style="font-weight: bold;">Description</label>
-        <textarea id="description" bind:value={description} rows="4" style="padding: 0.5rem;"></textarea>
-      </div>
-
-      <div style="display: flex; gap: 1rem;">
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
-          <label for="status" style="font-weight: bold;">Status</label>
-          <select id="status" bind:value={status} style="padding: 0.5rem;">
-            <option value="todo">Todo</option>
-            <option value="in_progress">In Progress</option>
-            <option value="done">Done</option>
-            <option value="rejected">Rejected</option>
-          </select>
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" bind:value={description} rows="4" placeholder="Describe the task requirements..."></textarea>
         </div>
-
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
-          <label for="due_to" style="font-weight: bold;">Due Date</label>
-          <input id="due_to" type="date" bind:value={due_to} style="padding: 0.5rem;" />
-        </div>
-      </div>
-
-      <hr style="border: 0; border-top: 1px solid #ddd;" />
-
-      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-        <label style="font-weight: bold;">Assign to Employee</label>
-        {#if assignedUser}
-          <div style="display: flex; align-items: center; justify-content: space-between; background: #e9ecef; padding: 0.5rem 1rem; border-radius: 4px;">
-            <span>Assigned: <strong>{assignedUser.name || assignedUser.email || assignedUser.id}</strong></span>
-            <button type="button" onclick={() => assignedUser = null} style="background: none; border: none; color: red; cursor: pointer; font-weight: bold;">X</button>
+        <div class="flex gap-sm">
+          <div class="form-group" style="flex: 1;">
+            <label for="status">Status</label>
+            <select id="status" bind:value={status}>
+              <option value="todo">Todo</option>
+              <option value="in_progress">In Progress</option>
+              <option value="done">Done</option>
+              <option value="rejected">Rejected</option>
+            </select>
           </div>
-        {:else}
-          <SearchBox 
-            endpoint="/api/users" 
-            placeholder="Search users by name or email..." 
-            onSelect={(user) => assignedUser = user} 
-          />
-        {/if}
-      </div>
+          <div class="form-group" style="flex: 1;">
+            <label for="due_to">Due Date</label>
+            <input id="due_to" type="date" bind:value={due_to} />
+          </div>
+        </div>
 
-      <hr style="border: 0; border-top: 1px solid #ddd;" />
+        <div class="divider"></div>
 
-      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-        <label style="font-weight: bold;">Task Dependencies</label>
-        <p style="font-size: 0.85rem; color: #666; margin: 0;">Search for tasks that must be completed before this one.</p>
-        
-        <SearchBox 
-          endpoint="/api/tasks" 
-          placeholder="Search active tasks..." 
-          onSelect={addDependency} 
-        />
+        <div class="form-group">
+          <label>Assign Employees ({assignedUsers.length})</label>
+          <p class="text-muted" style="font-size: 0.8rem; margin: 0 0 0.5rem 0;">Search and add multiple employees.</p>
+          <SearchBox endpoint="/api/users" placeholder="Search users..." onSelect={addAssignee} />
+          {#if assignedUsers.length > 0}
+            <ul class="flex flex-col gap-sm mt-sm" style="list-style: none; padding: 0;">
+              {#each assignedUsers as user (user.id)}
+                <li class="flex justify-between items-center" style="padding: 0.75rem; background: var(--bg1); border-radius: var(--radius);">
+                  <span style="font-weight: 600;">{user.name || user.email || user.id}</span>
+                  <button type="button" onclick={() => removeAssignee(user.id)} class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Remove</button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
 
-        {#if dependencies.length > 0}
-          <ul style="list-style: none; padding: 0; margin-top: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-            {#each dependencies as dep (dep.id)}
-              <li style="display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid #eee;">
-                <span>{dep.title}</span>
-                <button type="button" onclick={() => removeDependency(dep.id)} style="color: red; border: none; background: none; cursor: pointer;">Remove</button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
+        <div class="divider"></div>
 
-      <div style="display: flex; gap: 1rem; margin-top: 2rem; justify-content: flex-end;">
-        <button 
-          type="button" 
-          onclick={() => goTo('admin-dashboard')} 
-          style="padding: 0.75rem 1.5rem; background: #f8f9fa; color: #333; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-weight: bold;">
-          Cancel
-        </button>
-        
-        <button 
-          type="submit" 
-          disabled={loading} 
-          style="padding: 0.75rem 1.5rem; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">
-          {loading ? 'Saving...' : (taskId ? 'Update Task' : 'Create Task')}
-        </button>
-      </div>
+        <div class="form-group">
+          <label>Task Dependencies</label>
+          <p class="text-muted" style="font-size: 0.8rem; margin: 0 0 0.5rem 0;">Tasks that must be completed first.</p>
+          <SearchBox endpoint="/api/tasks" placeholder="Search tasks..." onSelect={addDependency} />
+          {#if dependencies.length > 0}
+            <ul class="flex flex-col gap-sm mt-sm" style="list-style: none; padding: 0;">
+              {#each dependencies as dep (dep.id)}
+                <li class="flex justify-between items-center" style="padding: 0.75rem; background: var(--bg1); border-radius: var(--radius);">
+                  <span>{dep.title}</span>
+                  <button type="button" onclick={() => removeDependency(dep.id)} class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Remove</button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
 
-    </form>
+        <div class="flex gap-sm mt-sm" style="justify-content: flex-end;">
+          <button type="button" onclick={() => goTo('admin-dashboard')} class="btn btn-secondary">Cancel</button>
+          <button type="submit" disabled={loading} class="btn btn-primary">{loading ? 'Saving...' : (taskId ? 'Update Task' : 'Create Task')}</button>
+        </div>
+      </form>
+    </div>
   {/if}
 </main>

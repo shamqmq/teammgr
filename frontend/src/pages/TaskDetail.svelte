@@ -4,9 +4,8 @@
   import { apiFetch } from '../lib/api';
 
   let { goTo, taskId } = $props();
-
   let task = $state(null);
-  let dependencies = $state([]); // List of tasks this task relies on
+  let dependencies = $state([]);
   let loading = $state(true);
   let error = $state('');
   let actionLoading = $state(false);
@@ -17,12 +16,9 @@
     try {
       const res = await apiFetch(`/api/tasks/${taskId}`);
       const data = await res.json();
-      
       if (!res.ok) throw new Error(data.error || 'Task not found');
-      
       task = data.data || data.task;
-      // Assuming your backend populates dependencies as an array of task objects
-      dependencies = task.dependencies || []; 
+      dependencies = task?.dependencies || [];
     } catch (err) {
       error = err.message;
     } finally {
@@ -40,73 +36,86 @@
         body: JSON.stringify({ status: newStatus }),
       });
       const data = await res.json();
-      
-      if (!res.ok) throw new Error(data.error || 'Status update rejected by server.');
-      
-      await loadTask(); // Reload data to reflect changes
+      if (!res.ok) throw new Error(data.error || 'Status update rejected.');
+      await loadTask();
     } catch (err) {
-      alert(err.message); // Simple alert for action errors to avoid cluttering the UI
+      alert(err.message);
     } finally {
       actionLoading = false;
     }
   }
 
-  // Reactive derived state to check if dependencies are blocking progress
-  let dependenciesMet = $derived(
-    dependencies.every(dep => dep.status === 'done')
-  );
+  let dependenciesMet = $derived(dependencies.length === 0 || dependencies.every(dep => dep.status === 'done'));
 </script>
 
-<main>
+<main class="page">
   {#if loading}
-    <p>Loading task details...</p>
+    <div class="card text-center text-muted" style="padding: 3rem;">Loading task details...</div>
   {:else if error}
-    <p>Error: {error}</p>
+    <div class="card" style="padding: 2rem;">
+      <div class="alert alert-error">{error}</div>
+      <button onclick={() => goTo('dashboard')} class="btn btn-secondary mt-sm">← Back</button>
+    </div>
   {:else if task}
-    <h1>{task.title}</h1>
-    <p><strong>Description:</strong> {task.description || 'No description provided.'}</p>
-    <p><strong>Status:</strong> {task.status.replace('_', ' ')}</p>
-    <p><strong>Priority:</strong> {task.priority}</p>
-    <p><strong>Due Date:</strong> {task.due_to ? new Date(task.due_to).toLocaleDateString() : 'None'}</p>
-    <p><strong>Assigned To:</strong> {task.assignedTo?.length ? task.assignedTo.map(u => u.name || u.email).join(', ') : 'Unassigned'}</p>
+    <div class="card">
+      <div class="task-card-header" style="margin-bottom: 1.5rem;">
+        <h1 style="margin: 0;">{task.title}</h1>
+        <span class="badge badge-{task.status}">{task.status.replace('_', ' ')}</span>
+      </div>
 
-    {#if dependencies.length > 0}
-      <section style="border: 1px solid #ccc; padding: 1rem; margin-top: 1rem;">
-        <h3>Dependencies (Must be Done first)</h3>
-        <ul>
-          {#each dependencies as dep}
-            <li>
-              <button on:click={() => goTo('task-detail', dep.id)}>{dep.title}</button> 
-              - Status: {dep.status}
-            </li>
-          {/each}
-        </ul>
-        {#if !dependenciesMet}
-          <p style="color: red;">⚠️ You cannot progress this task until all dependencies are Done.</p>
+      <div class="flex flex-col gap-sm" style="margin-bottom: 1.5rem;">
+        <div class="detail-row">
+          <span class="detail-label">Description</span>
+          <span class="detail-value">{task.description || 'No description provided.'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Priority</span>
+          <span class="detail-value text-yellow">{task.priority}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Due Date</span>
+          <span class="detail-value">{task.due_to ? new Date(task.due_to).toLocaleDateString() : 'None'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Assigned To</span>
+          <span class="detail-value">{task.assignedTo?.length ? task.assignedTo.map(u => u.name || u.email).join(', ') : 'Unassigned'}</span>
+        </div>
+      </div>
+
+      {#if dependencies.length > 0}
+        <div class="card" style="padding: 1.5rem; margin-bottom: 1.5rem; background: var(--bg0_h); border-color: var(--bg2);">
+          <h3 style="margin: 0 0 1rem 0; color: var(--blue);">Dependencies (Must be Done first)</h3>
+          <div class="flex flex-col gap-sm">
+            {#each dependencies as dep}
+              <div class="flex justify-between items-center" style="padding: 0.75rem; background: var(--bg0); border-radius: var(--radius);">
+                <button onclick={() => goTo('task-detail', dep.id)} class="table-link">{dep.title}</button>
+                <span class="badge badge-{dep.status}">{dep.status.replace('_', ' ')}</span>
+              </div>
+            {/each}
+          </div>
+          {#if !dependenciesMet}
+            <p class="text-yellow mt-sm" style="font-size: 0.9rem;">⚠️ Complete all dependencies before progressing.</p>
+          {/if}
+        </div>
+      {/if}
+
+      <div class="flex gap-sm">
+        {#if task.status === 'todo'}
+          <button disabled={actionLoading || !dependenciesMet} onclick={() => updateStatus('in_progress')} class="btn btn-primary">
+            {actionLoading ? '...' : 'Start Task →'}
+          </button>
+        {:else if task.status === 'in_progress'}
+          <button disabled={actionLoading || !dependenciesMet} onclick={() => updateStatus('done')} class="btn btn-success">
+            {actionLoading ? '...' : 'Mark as Done ✓'}
+          </button>
         {/if}
-      </section>
-    {/if}
 
-    <section style="margin-top: 2rem;">
-      {#if task.status === 'todo'}
-        <button 
-          disabled={actionLoading || !dependenciesMet} 
-          on:click={() => updateStatus('in_progress')}
-        >
-          Start Task (In Progress)
-        </button>
-      {:else if task.status === 'in_progress'}
-        <button 
-          disabled={actionLoading || !dependenciesMet} 
-          on:click={() => updateStatus('done')}
-        >
-          Mark as Done
-        </button>
-      {/if}
+        {#if $auth.user?.role === 'admin'}
+          <button onclick={() => goTo('edit-task', taskId)} class="btn btn-secondary">Edit Task</button>
+        {/if}
 
-      {#if $auth.user?.role === 'admin'}
-        <button on:click={() => goTo('edit-task', taskId)}>Edit Task</button>
-      {/if}
-    </section>
+        <button onclick={() => goTo('dashboard')} class="btn btn-secondary" style="margin-left: auto;">← Back</button>
+      </div>
+    </div>
   {/if}
 </main>

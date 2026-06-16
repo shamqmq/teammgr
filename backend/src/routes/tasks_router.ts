@@ -45,42 +45,48 @@ const router = express.Router();
 // This handles the search for your dependencies: /api/tasks?search=Fix
 router.get("/", authenticate, async (req, res) => {
   try {
-    let allTasks = await getAllTasks(); // Use your actual DB fetch function
-    
+    const user = res.locals.user;
+    let allTasks = await getFullTasks(user);
+
     const searchQuery = req.query.search as string;
 
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
-      
-      // 1. The Giant Net: Catch any task with a matching title
-      let filteredTasks = allTasks.filter(task => 
+      let filteredTasks = allTasks.filter(task =>
         task.title && task.title.toLowerCase().includes(lowerQuery)
       );
-
-      // 2. The Smart Sorter: Push exact matches to the top
       allTasks = filteredTasks.sort((a, b) => {
         const aTitle = (a.title || '').toLowerCase();
         const bTitle = (b.title || '').toLowerCase();
-
-        // Priority 1: Exact Match
         if (aTitle === lowerQuery && bTitle !== lowerQuery) return -1;
         if (bTitle === lowerQuery && aTitle !== lowerQuery) return 1;
-
-        // Priority 2: Starts With
         const aStarts = aTitle.startsWith(lowerQuery);
         const bStarts = bTitle.startsWith(lowerQuery);
         if (aStarts && !bStarts) return -1;
         if (bStarts && !aStarts) return 1;
-
-        // Priority 3: Contains (Alphabetical)
         return aTitle.localeCompare(bTitle);
       });
     }
 
-    // Return the sorted list to the SearchBox
-    return res.status(200).json({ data: allTasks });
-    
+    // EMPLOYEES: only show tasks they are directly assigned to
+    if (user.role === 'employee') {
+      allTasks = allTasks.filter(t => t.assignedTo?.includes(user.sub));
+    }
+
+    // Pagination
+    const params = parseQueryParams(req);
+    const result = applyQueryParams(allTasks, params);
+
+    return res.status(200).json({
+      data: result.tasks,
+      total: result.meta.total,
+      page: result.meta.page,
+      totalPages: result.meta.totalPages,
+    });
+
   } catch (error) {
+    if (error == "Forbidden") return res.status(403).json({ success: false, error: "Forbidden" });
+    console.error("GET /tasks error:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

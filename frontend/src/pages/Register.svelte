@@ -1,8 +1,6 @@
 <script>
   import { apiFetch } from '../lib/api';
-
   let { goTo } = $props();
-
   let name = $state('');
   let email = $state('');
   let password = $state('');
@@ -10,12 +8,10 @@
   let error = $state('');
   let loading = $state(false);
 
-  // FIX: Accept event and run preventDefault
   async function handleSubmit(e) {
-    e.preventDefault(); 
+    e.preventDefault();
     error = '';
     loading = true;
-
     try {
       const res = await apiFetch('/api/auth/register', {
         method: 'POST',
@@ -23,44 +19,48 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Registration failed');
-
       goTo('login');
     } catch (err) {
       error = err.message;
-      console.error('Registration error:', err);
     } finally {
       loading = false;
     }
   }
 </script>
 
-<div style="max-width: 400px; margin: 2rem auto; padding: 2rem; border: 1px solid #ccc; border-radius: 8px;">
-  <h2>Register</h2>
-  <form onsubmit={handleSubmit}>
-    <div style="margin-bottom: 1rem;">
-      <label>Name</label>
-      <input type="text" bind:value={name} required style="width: 100%; padding: 0.5rem;" />
+<div class="auth-page">
+  <div class="card auth-card">
+    <div class="auth-header">
+      <h1>Create Account</h1>
+      <p class="text-muted">Join the workspace</p>
     </div>
-    <div style="margin-bottom: 1rem;">
-      <label>Email</label>
-      <input type="email" bind:value={email} required style="width: 100%; padding: 0.5rem;" />
+    <form onsubmit={handleSubmit} class="flex flex-col gap-sm">
+      {#if error}<div class="alert alert-error">{error}</div>{/if}
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input id="name" type="text" bind:value={name} required placeholder="Jane Doe" />
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input id="email" type="email" bind:value={email} required placeholder="you@company.com" />
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input id="password" type="password" bind:value={password} required placeholder="••••••••" />
+      </div>
+      <div class="form-group">
+        <label for="role">Role</label>
+        <select id="role" bind:value={role}>
+          <option value="employee">Employee</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <button type="submit" disabled={loading} class="btn btn-primary w-full mt-sm">
+        {loading ? 'Creating...' : 'Create Account'}
+      </button>
+    </form>
+    <div class="auth-footer">
+      <p>Already have an account? <button class="link-btn" onclick={() => goTo('login')}>Sign In</button></p>
     </div>
-    <div style="margin-bottom: 1rem;">
-      <label>Password</label>
-      <input type="password" bind:value={password} required style="width: 100%; padding: 0.5rem;" />
-    </div>
-    <div style="margin-bottom: 1rem;">
-      <label>Role</label>
-      <select bind:value={role} style="width: 100%; padding: 0.5rem;">
-        <option value="employee">Employee</option>
-        <option value="admin">Admin</option>
-      </select>
-    </div>
-    <button type="submit" disabled={loading} style="padding: 0.6rem 1.5rem; cursor: pointer;">
-      {loading ? 'Registering...' : 'Register'}
-    </button>
-  </form>
-  {#if error}
-    <p style="color: red; margin-top: 1rem;">{error}</p>
-  {/if}
+  </div>
 </div>

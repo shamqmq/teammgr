@@ -1,6 +1,6 @@
 import { db } from '../config/database';
 import { users, tasks, tasks_assignment, tasks_dependence } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 
 // ─── Testing ─────────────────────────────────────────────────
 export async function testDB() {
