@@ -15,7 +15,7 @@ const router = express.Router();
 
 // GET /api/users
 // Supports optional search: /api/users?search=John
-router.get("/", authenticate, async (req, res) => {
+router.get("/", authenticate, adminOnly, async (req, res) => {
   try {
     // 1. Fetch all users from your database
     let allUsers = await getAllUsers(); // Replace with your actual DB call

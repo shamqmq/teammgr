@@ -47,7 +47,7 @@ router.post("/login", validate(loginSchema), async (req: Request, res: Response)
                         success: true,
                         data: {
                                 accessToken,
-                                user: { id: user.id, email: user.email, role: user.role },
+                          user: { id: user.id, email: user.email, name: user.name, role: user.role },
                         },
                 });
         } catch (error: any) {

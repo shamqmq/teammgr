@@ -10,13 +10,15 @@
   let page = $state(1);
   let totalPages = $state(1);
   let totalTasks = $state(0);
+  let searchQuery = $state(''); // ← NEW
   const limit = 20;
 
   async function loadTasks() {
     loading = true;
     error = '';
     try {
-      const res = await apiFetch(`/api/tasks?page=${page}&limit=${limit}`);
+      const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : '';
+      const res = await apiFetch(`/api/tasks?page=${page}&limit=${limit}${searchParam}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load tasks');
       tasks = data.data || [];
@@ -30,7 +32,12 @@
     }
   }
 
-  $effect(() => { page; loadTasks(); });
+  // Reload when page or search changes
+  $effect(() => {
+    page;
+    searchQuery;
+    loadTasks();
+  });
 
   async function updateStatus(taskId, newStatus) {
     actionLoadingId = taskId;
@@ -67,13 +74,27 @@
 
   {#if error}<div class="alert alert-error mb-sm">{error}</div>{/if}
 
-  <h2 class="text-muted" style="margin-bottom: 1rem;">Your Assignments <span style="color: var(--fg0);">({totalTasks})</span></h2>
+  <!-- NEW: Search bar -->
+  <div class="flex gap-sm mb-sm" style="align-items: center;">
+    <input 
+      type="text" 
+      bind:value={searchQuery} 
+      placeholder="Search your tasks..." 
+      style="max-width: 300px;" 
+    />
+    {#if searchQuery}
+      <button onclick={() => { searchQuery = ''; page = 1; }} class="btn btn-secondary" style="padding: 0.5rem 1rem;">Clear</button>
+    {/if}
+    <span class="text-muted" style="margin-left: auto;">{totalTasks} tasks</span>
+  </div>
+
+  <h2 class="text-muted" style="margin-bottom: 1rem;">Your Assignments</h2>
 
   {#if loading}
     <div class="card text-center text-muted" style="padding: 3rem;">Loading your tasks...</div>
   {:else if tasks.length === 0}
     <div class="card text-center" style="padding: 3rem;">
-      <p class="text-muted mb-sm">You have no assigned tasks right now.</p>
+      <p class="text-muted mb-sm">No tasks found.</p>
       <button onclick={() => goTo('request-task')} class="btn btn-primary">Request Your First Task</button>
     </div>
   {:else}

@@ -80,11 +80,6 @@
     <div class="card text-center text-muted" style="padding: 3rem;">Loading task data...</div>
   {:else}
     <div class="card">
-      <header style="margin-bottom: 2rem;">
-        <h1>{taskId ? 'Edit Task' : 'Create New Task'}</h1>
-        <p class="text-muted">{taskId ? 'Update task details and assignments.' : 'Define a new task for your team.'}</p>
-      </header>
-
       <form onsubmit={handleSubmit} class="flex flex-col gap-sm">
         {#if error}<div class="alert alert-error">{error}</div>{/if}
 

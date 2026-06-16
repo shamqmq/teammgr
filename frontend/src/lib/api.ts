@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
 import { auth } from './stores/auth';
 
-const API_BASE = ''; // Set your backend URL here if needed
+const API_BASE = '';
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
   const url = `${API_BASE}${path}`;
@@ -9,11 +9,16 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {}),
   };
 
+  // Auto-attach token from store unless manually overridden
   if (authState?.token) {
     headers['Authorization'] = `Bearer ${authState.token}`;
+  }
+
+  // Manual headers override everything (including Authorization)
+  if (options.headers) {
+    Object.assign(headers, options.headers as Record<string, string>);
   }
 
   const res = await fetch(url, {

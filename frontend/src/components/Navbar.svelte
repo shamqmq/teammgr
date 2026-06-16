@@ -21,10 +21,10 @@
         <span class="text-muted" style="font-size: 0.85rem;">Loading...</span>
       {:else if $auth.user}
         <div class="user-greeting">
-          <div class="user-avatar">{$auth.user?.name?.[0]?.toUpperCase() || $auth.user?.email?.[0]?.toUpperCase()}</div>
-          <span class="user-name">{$auth.user?.name || $auth.user?.email}</span>
+          <div class="user-avatar">{$auth.user.name?.[0]?.toUpperCase() || $auth.user.email?.[0]?.toUpperCase()}</div>
+          <span class="user-name">{$auth.user.name || $auth.user.email}</span>
         </div>
-        {#if $auth.user?.role === 'admin'}
+        {#if $auth.user.role === 'admin'}
           <button class="nav-btn" onclick={() => goTo('admin-dashboard')}>Dashboard</button>
         {:else}
           <button class="nav-btn" onclick={() => goTo('dashboard')}>Dashboard</button>
@@ -32,6 +32,7 @@
         <button class="nav-btn" onclick={() => goTo('edit-profile')}>Profile</button>
         <button class="nav-btn logout" onclick={handleLogout}>Logout</button>
       {:else}
+        <!-- Only show Guest on public pages (shouldn't really happen) -->
         <span class="text-muted" style="font-size: 0.85rem;">Guest</span>
       {/if}
     </div>
