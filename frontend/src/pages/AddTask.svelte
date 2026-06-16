@@ -13,7 +13,10 @@
       const res = await apiFetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...taskData, status: taskData.status || 'todo' }),
+        body: JSON.stringify({
+          ...taskData,
+          status: taskData.status || 'todo',
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create task');
@@ -32,7 +35,9 @@
       <h1>Create New Task</h1>
       <p class="text-muted">Set up a new task for your team</p>
     </header>
-    {#if error}<div class="alert alert-error mb-sm">{error}</div>{/if}
-    <TaskForm onSave={handleSave} loading={loading} {goTo} />
+    {#if error}
+      <div class="alert alert-error mb-sm">{error}</div>
+    {/if}
+    <TaskForm {goTo} onSave={handleSave} loading={loading} error={error} />
   </div>
 </main>

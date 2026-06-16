@@ -123,6 +123,9 @@ input::placeholder, textarea::placeholder { color: var(--fg4); }
 .btn-danger:hover { background: #e03e2f; }
 .btn-warning { background: var(--yellow); color: var(--bg0_h); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost {background: transparent; color: var(--fg4); border: 1px solid var(--bg2);}
+.btn-ghost:hover {color: var(--red); border-color: var(--red); background: rgba(251, 73, 52, 0.08);}
+.btn-sm {padding: 0.4rem 0.75rem; font-size: 0.8rem;}
 
 /* Navbar */
 .navbar {
@@ -281,3 +284,84 @@ input::placeholder, textarea::placeholder { color: var(--fg4); }
 .mt-md { margin-top: var(--space-md); }
 .mb-sm { margin-bottom: var(--space-sm); }
 .w-full { width: 100%; }
+.ml-auto { margin-left: auto; }
+.gap-xs { gap: var(--space-xs); }
+
+/* Priority badges */
+.badge-inline {
+  display: inline;
+  width: auto;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.85rem;
+}
+.badge-priority-low { background: var(--green); color: var(--bg0_h); }
+.badge-priority-medium { background: var(--yellow); color: var(--bg0_h); }
+.badge-priority-high { background: var(--red); color: var(--bg0_h); }
+
+/* ============================================
+   MODAL
+   ============================================ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.15s ease;
+}
+
+.modal-card {
+  background: var(--bg0);
+  border: 1px solid var(--bg2);
+  border-radius: var(--radius);
+  padding: 2rem;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  animation: slideUp 0.2s ease;
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--fg0);
+  margin-bottom: 0.75rem;
+}
+
+.modal-text {
+  color: var(--fg3);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
+/* Button groups */
+.btn-group {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+.btn-group-right {
+  margin-left: auto;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
