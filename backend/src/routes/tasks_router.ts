@@ -6,6 +6,7 @@ import {
         addDependency,
         assignUserToTask,
         deleteTask,
+        getAllTasks,
         getAllUsers,
         getAssignmentsForTask,
         getDependenciesForTask,
@@ -40,26 +41,55 @@ const STATUS_ORDER = ['requested', 'todo', 'in_progress', 'done'] as const;
 
 const router = express.Router();
 
-router.get("/", authenticate, async (req: Request, res: Response) => {
-        const user = res.locals.user;
-        const query = parseQueryParams(req);
-        let allTasks: Task[];
-        try {
-                allTasks = await getFullTasks(user)
-                const { tasks, meta } = applyQueryParams(allTasks, query);
+// GET /api/tasks
+// This handles the search for your dependencies: /api/tasks?search=Fix
+router.get("/", authenticate, async (req, res) => {
+  try {
+    const user = res.locals.user;
+    let allTasks = await getFullTasks(user);
 
-                res.status(200).json({
-                        success: true,
-                        data: tasks,
-                        meta,
-                });
-        } catch (err) {
-                if (err == "Forbidden")
-                        return res.status(403).json({ success: false, error: "Forbidden" });
-        }
-        // Apply filters, sorting, pagination
+    const searchQuery = req.query.search as string;
+
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      let filteredTasks = allTasks.filter(task =>
+        task.title && task.title.toLowerCase().includes(lowerQuery)
+      );
+      allTasks = filteredTasks.sort((a, b) => {
+        const aTitle = (a.title || '').toLowerCase();
+        const bTitle = (b.title || '').toLowerCase();
+        if (aTitle === lowerQuery && bTitle !== lowerQuery) return -1;
+        if (bTitle === lowerQuery && aTitle !== lowerQuery) return 1;
+        const aStarts = aTitle.startsWith(lowerQuery);
+        const bStarts = bTitle.startsWith(lowerQuery);
+        if (aStarts && !bStarts) return -1;
+        if (bStarts && !aStarts) return 1;
+        return aTitle.localeCompare(bTitle);
+      });
+    }
+
+    // EMPLOYEES: only show tasks they are directly assigned to
+    if (user.role === 'employee') {
+      allTasks = allTasks.filter(t => t.assignedTo?.includes(user.sub));
+    }
+
+    // Pagination
+    const params = parseQueryParams(req);
+    const result = applyQueryParams(allTasks, params);
+
+    return res.status(200).json({
+      data: result.tasks,
+      total: result.meta.total,
+      page: result.meta.page,
+      totalPages: result.meta.totalPages,
+    });
+
+  } catch (error) {
+    if (error == "Forbidden") return res.status(403).json({ success: false, error: "Forbidden" });
+    console.error("GET /tasks error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });
-
 
 router.get("/:id", authenticate, async (req: Request, res: Response) => {
 

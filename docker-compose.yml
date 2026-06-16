@@ -5,6 +5,8 @@ services:
     container_name: teammgr-api
     env_file:
       - ./backend/.env          # injects all your secrets (JWT, DB_URL, etc.)
+    volumes:
+      - ./backend/src:/app/src
     depends_on:
       db:
         condition: service_healthy
@@ -20,10 +22,6 @@ services:
     container_name: teammgr-db
     env_file:
       - ./backend/.env          # injects all your secrets (JWT, DB_URL, etc.)
-    # environment:
-    #   POSTGRES_USER: teammgr
-    #   POSTGRES_PASSWORD: teammgr
-    #   POSTGRES_DB: teammgr
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -47,6 +45,23 @@ services:
     networks:
       - teammgr-net
 
+  # --- Frontend -----
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: teammgr-frontend
+    ports:
+      - "5173:5173"            # expose Vite dev server
+    volumes:
+      - ./frontend/src:/app/src   # hot reload
+      - ./frontend/public:/app/public
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - nginx                   # or app, but nginx proxies
+    networks:
+      - teammgr-net
 volumes:
   pgdata:
 

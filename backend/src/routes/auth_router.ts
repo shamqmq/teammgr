@@ -8,6 +8,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/
 //| POST   | /auth/register | Public | Register new user (optional admin flag)         |
 //| POST   | /auth/login    | Public | Returns access + refresh tokens                 |
 //| POST   | /auth/refresh  | Public | Accepts refresh token, returns new access token |
+//| POST   | /auth/logout   | Public | Logging out                                     |
 
 const router = express.Router();
 
@@ -36,7 +37,7 @@ router.post("/login", validate(loginSchema), async (req: Request, res: Response)
                 res.cookie('refreshToken', refreshToken, {
                         httpOnly: true,          // not accessible via JavaScript
                         // secure: process.env.NODE_ENV === 'production',  // send only over HTTPS in prod
-                        sameSite: 'strict',
+                        sameSite: 'lax',
                         maxAge: 7 * 24 * 60 * 60 * 1000,   // 7 days (match the token expiry)
                         path: '/',
                 });
@@ -46,7 +47,7 @@ router.post("/login", validate(loginSchema), async (req: Request, res: Response)
                         success: true,
                         data: {
                                 accessToken,
-                                user: { id: user.id, email: user.email, role: user.role },
+                          user: { id: user.id, email: user.email, name: user.name, role: user.role },
                         },
                 });
         } catch (error: any) {
@@ -59,7 +60,7 @@ router.post("/login", validate(loginSchema), async (req: Request, res: Response)
                         res.status(500).json({ success: false, message: 'Internal server error' });
                 }
         }
-})
+});
 
 router.post('/refresh', async (req: Request, res: Response) => {
         const refreshToken = req.cookies?.refreshToken;
@@ -102,4 +103,11 @@ router.post('/refresh', async (req: Request, res: Response) => {
                 return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
         }
 });
+
+// POST /auth/logout
+router.post("/logout", (req: Request, res: Response) => {
+    res.clearCookie('refreshToken', { path: '/' });
+    res.status(200).json({ success: true, message: 'Successfully logged out' });
+});
+
 export default router;

@@ -1,5 +1,4 @@
-# ---- Base ----
-FROM oven/bun:1 AS base
+FROM oven/bun:1-alpine AS base
 WORKDIR /app
 
 # Install dependencies first (layer caching)
@@ -12,9 +11,5 @@ COPY . .
 # Expose the port your Express app listens on
 EXPOSE 3000
 
-# Run migration inside the container
-CMD ["sh", "-c", "bun run db:migrate"]
-
-# Start the app directly with Bun (handles .ts natively)
-CMD ["bun", "run", "src/server.ts"]
-
+# Run migration then start the server with file watching
+CMD ["sh", "-c", "bun run db:migrate && bun --watch src/server.ts"]

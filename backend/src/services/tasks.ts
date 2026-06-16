@@ -1,5 +1,5 @@
 import { type Request } from "express";
-import { getAllTasks, getAssignmentsForTask, getDependenciesForTask, getTasksByUser } from "../utils/db_interface"
+import { getAllTasks, getAssignmentsForTask, getAssignmentsForUser, getDependenciesForTask, getTasksByUser } from "../utils/db_interface"
 
 export interface Task {
         id: string;
@@ -85,27 +85,37 @@ export function parseQueryParams(req: Request): QueryParams {
         };
 }
 
-export async function getFullTasks(user: {sub: string, role: 'admin' | 'employee',}): Promise<Task[]> {
-        // Role-based data fetching
-        let allTasks: Task[];
-        if (user.role === "admin") {
-                allTasks = await getAllTasks();
-        } else if (user.role === "employee") {
-                allTasks = await getTasksByUser(user.sub);
-        } else {
-                throw new Error("Forbidden");
-        }
+export async function getFullTasks(user: { sub: string; role: 'admin' | 'employee' }): Promise<Task[]> {
+  let allTasks: Task[];
 
-        // Enrich each task with assignments AND dependencies in parallel
-        await Promise.all(
-                allTasks.map(async (task) => {
-                        const [assignments, dependencies] = await Promise.all([
-                                getAssignmentsForTask(task.id),
-                                getDependenciesForTask(task.id),
-                        ]);
-                        task.assignedTo = assignments.map((a) => a.employee_id);
-                        task.dependsOn = dependencies.map((d) => d.required_task_id);
-                })
-        );
-        return allTasks;
+  if (user.role === "admin") {
+    allTasks = await getAllTasks();
+  } else if (user.role === "employee") {
+    // 1. Get assignment records
+    const assignments = await getAssignmentsForUser(user.sub);
+    if (assignments.length === 0) {
+      allTasks = [];
+    } else {
+      // 2. Get the actual task objects by those IDs
+      const taskIds = [...new Set(assignments.map(a => a.task_id))];
+      const allDbTasks = await getAllTasks();
+      allTasks = allDbTasks.filter(t => taskIds.includes(t.id));
+    }
+  } else {
+    throw new Error("Forbidden");
+  }
+
+  // Enrich each task with assignments AND dependencies
+  await Promise.all(
+    allTasks.map(async (task) => {
+      const [assignments, dependencies] = await Promise.all([
+        getAssignmentsForTask(task.id),
+        getDependenciesForTask(task.id),
+      ]);
+      task.assignedTo = assignments.map((a) => a.employee_id);
+      task.dependsOn = dependencies.map((d) => d.required_task_id);
+    })
+  );
+
+  return allTasks;
 }

@@ -4,11 +4,17 @@ import users_router from "./routes/users_router";
 import tasks_router from "./routes/tasks_router";
 import cookieParser from 'cookie-parser';
 import { testDB } from './utils/db_interface';
+import cors from 'cors';
+
 
 const app = express();
 
 app.use(express.json());
 app.use(cookieParser());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  credentials: true,   // for cookies if you use them
+}));
 
 app.use("/api/auth", auth_router);
 app.use("/api/users", users_router);
